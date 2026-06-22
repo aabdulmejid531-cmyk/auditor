@@ -9,11 +9,14 @@ import {
   Settings,
   LogOut,
   ShieldCheck,
-  ClipboardCheck
+  ClipboardCheck,
+  Sun,
+  Moon
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import * as Sonner from "sonner";
+import { useTheme } from "next-themes";
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard" },
@@ -26,6 +29,7 @@ const navItems = [
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -44,6 +48,16 @@ export default function Sidebar() {
         <span className="text-xl font-bold tracking-tight">AuditFlow</span>
       </div>
       
+      <div className="px-3 py-2 border-b">
+        <button
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-accent hover:text-accent-foreground hover:scale-105"
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
+        </button>
+      </div>
+      
       <div className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
         {navItems.map((item) => {
           const isActive = location.pathname === item.href;
@@ -52,10 +66,10 @@ export default function Sidebar() {
               key={item.href}
               to={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
                 isActive 
-                  ? "bg-primary text-primary-foreground shadow-sm" 
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary text-primary-foreground shadow-sm hover:scale-105" 
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:scale-105"
               )}
             >
               <item.icon className="h-4 w-4" />
@@ -68,7 +82,7 @@ export default function Sidebar() {
       <div className="p-4 border-t mt-auto">
         <button
           onClick={handleLogout}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-all duration-200 hover:bg-destructive/10 hover:text-destructive hover:scale-105"
         >
           <LogOut className="h-4 w-4" />
           Logout

@@ -11,6 +11,7 @@ import AIAssistant from "@/pages/AIAssistant";
 import ReportView from "@/pages/ReportView";
 import AuthPage from "@/pages/Auth";
 import type { User } from "@supabase/supabase-js";
+import { ThemeProvider } from "@/providers/ThemeProvider";
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -48,8 +49,9 @@ function App() {
   const isAuthenticated = !!user;
 
   return (
-    <BrowserRouter>
-      <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <BrowserRouter>
+        <div className="min-h-screen bg-background text-foreground flex overflow-hidden">
         {isAuthenticated && <Sidebar />}
         <main className="flex-1 overflow-y-auto">
           <Routes>
@@ -93,7 +95,8 @@ function App() {
         </main>
       </div>
       <Toaster position="top-right" />
-    </BrowserRouter>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }
 
