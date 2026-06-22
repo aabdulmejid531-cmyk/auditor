@@ -11,3 +11,4 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = Supabase.createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 export const openaiApiKey = import.meta.env.VITE_OPENAI_API_KEY;
+export const deepseekApiKey = import.meta.env.VITE_DEEPSEEK_API_KEY;

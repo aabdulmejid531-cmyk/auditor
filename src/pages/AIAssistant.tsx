@@ -19,7 +19,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import * as Sonner from "sonner";
 import { cn } from "@/lib/utils";
-import { openaiApiKey } from "@/integrations/supabase/client";
+import { openaiApiKey, deepseekApiKey } from "@/integrations/supabase/client";
 
 export default function AIAssistant() {
   const [query, setQuery] = useState("");
@@ -29,6 +29,10 @@ export default function AIAssistant() {
   const [isTyping, setIsTyping] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
+
+  const hasDeepSeek = deepseekApiKey && deepseekApiKey !== 'sk-your-deepseek-api-key-here';
+  const hasOpenAI = openaiApiKey && openaiApiKey !== 'sk-your-openai-api-key-here';
+  const aiProvider = hasDeepSeek ? 'DeepSeek' : hasOpenAI ? 'GPT-4o-mini' : 'local';
 
   function generateMockResponse(query: string): string {
     const q = query.toLowerCase();
@@ -72,7 +76,7 @@ export default function AIAssistant() {
     setIsTyping(true);
 
     try {
-      if (!openaiApiKey || openaiApiKey === 'sk-your-openai-api-key-here') {
+      if (!hasDeepSeek && !hasOpenAI) {
         const mockResponse = generateMockResponse(userMessage);
         setChatHistory(prev => [...prev, { role: 'ai', content: mockResponse }]);
         setIsTyping(false);
@@ -101,19 +105,26 @@ When responding:
 
 Keep responses thorough but focused. Always prioritize professional skepticism and audit quality.`;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const provider = hasDeepSeek ? 'deepseek' : 'openai';
+      const endpoint = provider === 'deepseek'
+        ? 'https://api.deepseek.com/v1/chat/completions'
+        : 'https://api.openai.com/v1/chat/completions';
+      const model = provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini';
+      const apiKey = provider === 'deepseek' ? deepseekApiKey : openaiApiKey;
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage }
           ],
-          max_tokens: 1500,
+          max_tokens: 2000,
           temperature: 0.8,
         }),
       });
@@ -121,8 +132,8 @@ Keep responses thorough but focused. Always prioritize professional skepticism a
       const data = await response.json();
 
       if (!response.ok) {
-        const openaiError = data?.error?.message || response.statusText;
-        throw new Error(`OPENAI_ERROR: ${openaiError}`);
+        const apiError = data?.error?.message || response.statusText;
+        throw new Error(`API_ERROR:${provider}:${apiError}`);
       }
 
       const aiResponse = data.choices[0].message.content;
@@ -132,17 +143,24 @@ Keep responses thorough but focused. Always prioritize professional skepticism a
       let errorMessage = "I'm currently unable to process your request. Please try again later.";
       
       if (error instanceof Error) {
-        if (error.message.startsWith('OPENAI_ERROR:')) {
-          const openaiMsg = error.message.replace('OPENAI_ERROR: ', '');
-          if (openaiMsg.toLowerCase().includes('api key') || openaiMsg.toLowerCase().includes('incorrect')) {
-            errorMessage = "Invalid OpenAI API key. Please check your .env file and ensure you have a valid key from https://platform.openai.com";
-          } else if (openaiMsg.toLowerCase().includes('insufficient_quota') || openaiMsg.toLowerCase().includes('rate limit')) {
-            errorMessage = "OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/account/billing";
+        if (error.message.startsWith('API_ERROR:')) {
+          const parts = error.message.split(':');
+          const provider = parts[1];
+          const apiMsg = parts.slice(2).join(':');
+          
+          if (apiMsg.toLowerCase().includes('api key') || apiMsg.toLowerCase().includes('incorrect') || apiMsg.toLowerCase().includes('invalid')) {
+            errorMessage = provider === 'deepseek'
+              ? "Invalid DeepSeek API key. Get one at https://platform.deepseek.com and add it to your .env file as VITE_DEEPSEEK_API_KEY."
+              : "Invalid OpenAI API key. Get one at https://platform.openai.com and add it to your .env file as VITE_OPENAI_API_KEY.";
+          } else if (apiMsg.toLowerCase().includes('insufficient_quota') || apiMsg.toLowerCase().includes('rate limit') || apiMsg.toLowerCase().includes('exceeded')) {
+            errorMessage = `${provider === 'deepseek' ? 'DeepSeek' : 'OpenAI'} API quota exceeded. Check your billing at ${provider === 'deepseek' ? 'https://platform.deepseek.com' : 'https://platform.openai.com/account/billing'}.`;
+          } else if (apiMsg.toLowerCase().includes('context length') || apiMsg.toLowerCase().includes('token')) {
+            errorMessage = "Your question is too long. Please try a shorter, more specific question.";
           } else {
-            errorMessage = `OpenAI API error: ${openaiMsg}`;
+            errorMessage = `${provider === 'deepseek' ? 'DeepSeek' : 'OpenAI'} API error: ${apiMsg}`;
           }
         } else if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-          errorMessage = "Unable to connect to OpenAI. Check your internet connection or if api.openai.com is accessible.";
+          errorMessage = "Unable to connect to the AI service. Check your internet connection.";
         }
       }
       
@@ -180,7 +198,9 @@ Keep responses thorough but focused. Always prioritize professional skepticism a
       
       <div className="flex items-center gap-2">
         <Brain className="h-5 w-5 text-primary" />
-        <span className="text-sm text-muted-foreground">Powered by GPT-4o-mini</span>
+        <span className="text-sm text-muted-foreground">
+          {aiProvider === 'DeepSeek' ? 'Powered by DeepSeek' : aiProvider === 'GPT-4o-mini' ? 'Powered by GPT-4o-mini' : 'Local mode - no API key configured'}
+        </span>
       </div>
 
       <Tabs defaultValue="chat" className="w-full">
