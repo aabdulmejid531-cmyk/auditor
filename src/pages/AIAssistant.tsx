@@ -30,6 +30,32 @@ export default function AIAssistant() {
   const [uploading, setUploading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
 
+  function generateMockResponse(query: string): string {
+    const q = query.toLowerCase();
+    if (q.includes('risk')) {
+      return "Common risks for Ethiopian firms include currency fluctuation impacts on imports, VAT compliance complexities, and internal control weaknesses in cash-heavy transactions. I recommend performing detailed substantive testing on foreign exchange gains/losses.";
+    }
+    if (q.includes('inventory') || q.includes('stock')) {
+      return "For inventory valuation, verify compliance with IAS 2. In the Ethiopian context, ensure lower of cost and NRV is properly applied, especially for seasonal goods. Check warehouse entry vouchers (GRN) against purchase invoices.";
+    }
+    if (q.includes('vat') || q.includes('tax')) {
+      return "VAT compliance is a key risk in Ethiopia. Verify that withholding VAT on supplier payments is properly accounted for. Check that VAT returns are filed on time and input VAT on imports is correctly documented per Ethiopian proclamation.";
+    }
+    if (q.includes('cash') || q.includes('petty')) {
+      return "Cash-heavy transactions in Ethiopian retail firms pose significant control risks. Recommend surprise cash counts, segregation of duties between cashier and recorder, and daily reconciliation of cash sales per POS records.";
+    }
+    if (q.includes('ifrs') || q.includes('ias')) {
+      return "Under IFRS adoption in Ethiopia, common pain points include: IFRS 16 lease accounting for long-term land leases, IFRS 9 expected credit loss models for trade receivables, and IAS 36 impairment testing for assets impacted by inflation.";
+    }
+    if (q.includes('finding') || q.includes('draft')) {
+      return "Based on your issue, here's a draft finding:\n\n**Condition:** During our review, we noted that...\n**Criteria:** Per IFRS...\n**Cause:** Inadequate oversight...\n**Effect:** Misstatement of...\n**Recommendation:** We recommend that management...";
+    }
+    if (q.includes('hello') || q.includes('hi ') || q === 'hi') {
+      return "Hello! I'm here to help with Ethiopian auditing and accounting questions. What would you like to know about standards, risk assessment, or audit procedures?";
+    }
+    return "I've analyzed your query based on Ethiopian accounting standards and IFRS. For more specific guidance, please provide additional details about the audit area you're working on. You can also set up an OpenAI API key in your .env file for more comprehensive AI-powered responses.";
+  }
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!query.trim()) return;
@@ -40,8 +66,11 @@ export default function AIAssistant() {
     setIsTyping(true);
 
     try {
-      if (!openaiApiKey) {
-        throw new Error('OpenAI API key not configured');
+      if (!openaiApiKey || openaiApiKey === 'sk-your-openai-api-key-here') {
+        const mockResponse = generateMockResponse(userMessage);
+        setChatHistory(prev => [...prev, { role: 'ai', content: mockResponse }]);
+        setIsTyping(false);
+        return;
       }
 
       const systemPrompt = `You are an expert audit assistant specializing in Ethiopian accounting standards and IFRS. Provide practical, actionable advice for auditors working in Ethiopia. Focus on:
@@ -70,28 +99,35 @@ export default function AIAssistant() {
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to get AI response');
+        const openaiError = data?.error?.message || response.statusText;
+        throw new Error(`OPENAI_ERROR: ${openaiError}`);
       }
 
-      const data = await response.json();
       const aiResponse = data.choices[0].message.content;
       
       setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
     } catch (error) {
-      console.error('AI Error:', error);
       let errorMessage = "I'm currently unable to process your request. Please try again later.";
       
       if (error instanceof Error) {
-        if (error.message.includes('API key')) {
-          errorMessage = "AI service is not configured. Please contact your administrator.";
-        } else if (error.message.includes('Failed to get')) {
-          errorMessage = "Unable to connect to AI service. Please check your internet connection.";
+        if (error.message.startsWith('OPENAI_ERROR:')) {
+          const openaiMsg = error.message.replace('OPENAI_ERROR: ', '');
+          if (openaiMsg.toLowerCase().includes('api key') || openaiMsg.toLowerCase().includes('incorrect')) {
+            errorMessage = "Invalid OpenAI API key. Please check your .env file and ensure you have a valid key from https://platform.openai.com";
+          } else if (openaiMsg.toLowerCase().includes('insufficient_quota') || openaiMsg.toLowerCase().includes('rate limit')) {
+            errorMessage = "OpenAI API quota exceeded. Please check your billing at https://platform.openai.com/account/billing";
+          } else {
+            errorMessage = `OpenAI API error: ${openaiMsg}`;
+          }
+        } else if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
+          errorMessage = "Unable to connect to OpenAI. Check your internet connection or if api.openai.com is accessible.";
         }
       }
       
       setChatHistory(prev => [...prev, { role: 'ai', content: errorMessage }]);
-      Sonner.toast.error(errorMessage);
     } finally {
       setIsTyping(false);
     }
