@@ -19,7 +19,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import * as Sonner from "sonner";
 import { cn } from "@/lib/utils";
-import { openaiApiKey, deepseekApiKey } from "@/integrations/supabase/client";
+
+function isValidApiKey(key: string | undefined): boolean {
+  return !!key && key.startsWith('sk-') && !key.includes('your-') && !key.includes('enter-');
+}
 
 export default function AIAssistant() {
   const [query, setQuery] = useState("");
@@ -30,8 +33,10 @@ export default function AIAssistant() {
   const [uploading, setUploading] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
 
-  const hasDeepSeek = deepseekApiKey && deepseekApiKey !== 'sk-your-deepseek-api-key-here';
-  const hasOpenAI = openaiApiKey && openaiApiKey !== 'sk-your-openai-api-key-here';
+  const openaiKey = import.meta.env.VITE_OPENAI_API_KEY as string | undefined;
+  const deepseekKey = import.meta.env.VITE_DEEPSEEK_API_KEY as string | undefined;
+  const hasDeepSeek = isValidApiKey(deepseekKey);
+  const hasOpenAI = isValidApiKey(openaiKey);
   const aiProvider = hasDeepSeek ? 'DeepSeek' : hasOpenAI ? 'GPT-4o-mini' : 'local';
 
   function generateMockResponse(query: string): string {
@@ -110,7 +115,7 @@ Keep responses thorough but focused. Always prioritize professional skepticism a
         ? 'https://api.deepseek.com/v1/chat/completions'
         : 'https://api.openai.com/v1/chat/completions';
       const model = provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini';
-      const apiKey = provider === 'deepseek' ? deepseekApiKey : openaiApiKey;
+      const apiKey = provider === 'deepseek' ? deepseekKey : openaiKey;
 
       const response = await fetch(endpoint, {
         method: 'POST',
