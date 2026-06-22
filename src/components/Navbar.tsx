@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { 
-  Store, 
+  ShieldCheck,
   User as UserIcon, 
   LogOut, 
   PlusCircle, 
@@ -37,8 +37,8 @@ export default function Navbar({ user }: NavbarProps) {
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <div className="flex items-center gap-2">
           <Link to="/" className="flex items-center gap-2 font-bold text-2xl tracking-tighter text-primary">
-            <Store className="h-6 w-6" />
-            <span>Gebeya</span>
+            <ShieldCheck className="h-6 w-6" />
+            <span>AuditFlow</span>
           </Link>
           
           <div className="hidden md:flex ml-8 items-center gap-6">
