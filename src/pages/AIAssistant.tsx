@@ -269,6 +269,37 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
 
       if (aiResponse) {
         setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      } else if (hasOpenAI || hasDeepSeek) {
+        // Auto-fallback to OpenAI/DeepSeek when all Gemini models fail
+        const provider = hasOpenAI ? 'openai' : 'deepseek';
+        const endpoint = provider === 'deepseek'
+          ? 'https://api.deepseek.com/v1/chat/completions'
+          : 'https://api.openai.com/v1/chat/completions';
+        const model = provider === 'deepseek' ? 'deepseek-chat' : 'gpt-4o-mini';
+        const fallbackApiKey = provider === 'deepseek' ? envDeepseekKey : envOpenaiKey;
+
+        const fallbackResponse = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${fallbackApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              ...chatHistory.map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.content })),
+              { role: 'user', content: userMessage }
+            ],
+            max_tokens: 2000,
+            temperature: 0.7,
+          }),
+        });
+
+        const fallbackData = await fallbackResponse.json();
+        if (!fallbackResponse.ok) throw new Error(`API_ERROR:${provider}:${fallbackData?.error?.message || fallbackResponse.statusText}`);
+        const fallbackText = fallbackData.choices[0].message.content;
+        setChatHistory(prev => [...prev, { role: 'ai', content: fallbackText }]);
       } else {
         throw new Error(`GEMINI_API_ERROR:${lastError || 'All Gemini models unavailable'}`);
 
