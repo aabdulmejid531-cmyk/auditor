@@ -267,6 +267,11 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
 
             const errorMsg = data?.error?.message || response.statusText || 'Unknown error';
 
+            // If it's an API key error, throw immediately
+            if (errorMsg.toLowerCase().includes('api key') || errorMsg.toLowerCase().includes('key not valid') || response.status === 400 || response.status === 403) {
+              throw new Error(`GEMINI_API_ERROR:${errorMsg}`);
+            }
+
             // If it's a model not found or invalid, try next model
             if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('not supported')) {
               lastError = errorMsg;
@@ -330,10 +335,7 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
         const fallbackText = fallbackData.choices[0].message.content;
         setChatHistory(prev => [...prev, { role: 'ai', content: fallbackText }]);
       } else {
-        // Fallback to local simulator when Gemini fails and no other provider is available
-        const mockResponse = generateMockResponse(userMessage);
-        const warningHeader = "⚠️ **Note: Gemini API is currently overloaded or unavailable.** Falling back to local simulator.\n\n";
-        setChatHistory(prev => [...prev, { role: 'ai', content: warningHeader + mockResponse }]);
+        throw new Error(`GEMINI_API_ERROR:${lastError || 'All Gemini models failed. Please verify your connection and API key.'}`);
       }
     } catch (error: any) {
       let errorMessage = "Unable to process AI audit query at this moment.";
