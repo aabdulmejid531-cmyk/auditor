@@ -14,7 +14,9 @@ import {
   AlertCircle,
   RefreshCw,
   Sparkles,
-  Info
+  Info,
+  ShieldAlert,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

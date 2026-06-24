@@ -487,7 +487,7 @@ export default function Dashboard() {
                 <div className="lg:col-span-5 space-y-6">
                   <div className="space-y-2">
                     <Label htmlFor="benchmark-select" className="text-sm font-semibold flex items-center gap-1">
-                      Materiality Benchmark <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" title="ISA 320.A8 lists factors affecting benchmark choices." />
+                      Materiality Benchmark <span title="ISA 320.A8 lists factors affecting benchmark choices."><HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" /></span>
                     </Label>
                     <Select value={benchmark} onValueChange={(val: any) => setBenchmark(val)}>
                       <SelectTrigger id="benchmark-select" className="w-full bg-background border-muted-foreground/20">
