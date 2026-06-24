@@ -70,8 +70,13 @@ export default function AIAssistant() {
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
-    if (customKey.trim().length >= 20) {
-      localStorage.setItem("gemini_api_key", customKey.trim());
+    const key = customKey.trim();
+    if (key.length >= 20) {
+      if (!key.startsWith("AIzaSy") && !key.startsWith("AQ.")) {
+        Sonner.toast.error("Invalid key format. Google Gemini keys usually start with 'AIzaSy' or 'AQ.'.");
+        return;
+      }
+      localStorage.setItem("gemini_api_key", key);
       Sonner.toast.success("Gemini API key saved successfully!");
       setShowKeyInput(false);
     } else {
@@ -225,46 +230,70 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
       let lastError: string | null = null;
 
       for (const model of geminiModels) {
-        try {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: geminiContents,
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              generationConfig: { temperature: 0.6, maxOutputTokens: 2500 }
-            }),
-          });
+        let retries = 0;
+        const maxRetries = 3;
+        let success = false;
 
-          const data = await response.json();
+        while (retries <= maxRetries && !success) {
+          try {
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: geminiContents,
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { temperature: 0.6, maxOutputTokens: 2500 }
+              }),
+            });
 
-          if (response.ok) {
-            aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
-            if (aiResponse) break;
+            const textResponse = await response.text();
+            let data: any = {};
+            try {
+              data = JSON.parse(textResponse);
+            } catch (err) {
+              if (!response.ok) {
+                data = { error: { message: `HTTP Error ${response.status}: ${textResponse.substring(0, 50)}` } };
+              }
+            }
+
+            if (response.ok && data.candidates) {
+              aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+              if (aiResponse) {
+                success = true;
+                break;
+              }
+            }
+
+            const errorMsg = data?.error?.message || response.statusText || 'Unknown error';
+
+            // If it's a model not found or invalid, try next model
+            if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('not supported')) {
+              lastError = errorMsg;
+              break;
+            }
+
+            // If it's a quota/demand error, retry with backoff
+            if (errorMsg.toLowerCase().includes('high demand') || errorMsg.toLowerCase().includes('quota') || errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('429') || response.status === 503 || response.status === 429) {
+              lastError = errorMsg;
+              retries++;
+              if (retries <= maxRetries) {
+                // Exponential backoff: 1s, 2s, 4s
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retries - 1)));
+                continue;
+              }
+              break;
+            }
+
+            // For other errors, throw immediately
+            throw new Error(`GEMINI_API_ERROR:${errorMsg}`);
+          } catch (e: any) {
+            if (e.message?.startsWith('GEMINI_API_ERROR:')) throw e;
+            lastError = e.message || 'Unknown error';
+            break;
           }
-
-          const errorMsg = data?.error?.message || response.statusText;
-
-          // If it's a model not found or invalid, try next model
-          if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('not supported')) {
-            lastError = errorMsg;
-            continue;
-          }
-
-          // If it's a quota/demand error, try next model
-          if (errorMsg.toLowerCase().includes('high demand') || errorMsg.toLowerCase().includes('quota') || errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('429')) {
-            lastError = errorMsg;
-            continue;
-          }
-
-          // For other errors, throw immediately
-          throw new Error(`GEMINI_API_ERROR:${errorMsg}`);
-        } catch (e: any) {
-          if (e.message?.startsWith('GEMINI_API_ERROR:')) throw e;
-          lastError = e.message || 'Unknown error';
-          continue;
         }
+        if (success) break;
       }
 
       if (aiResponse) {
@@ -301,8 +330,11 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
         const fallbackText = fallbackData.choices[0].message.content;
         setChatHistory(prev => [...prev, { role: 'ai', content: fallbackText }]);
       } else {
-        throw new Error(`GEMINI_API_ERROR:${lastError || 'All Gemini models unavailable'}`);
-
+        // Fallback to local simulator when Gemini fails and no other provider is available
+        const mockResponse = generateMockResponse(userMessage);
+        const warningHeader = "⚠️ **Note: Gemini API is currently overloaded or unavailable.** Falling back to local simulator.\n\n";
+        setChatHistory(prev => [...prev, { role: 'ai', content: warningHeader + mockResponse }]);
+      }
     } catch (error: any) {
       let errorMessage = "Unable to process AI audit query at this moment.";
       if (error.message && error.message.startsWith('GEMINI_API_ERROR:')) {
@@ -397,7 +429,7 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
             <form onSubmit={handleSaveKey} className="flex gap-2">
               <Input 
                 type="password"
-                placeholder="Paste Gemini API Key (starts with AIzaSy)..."
+                placeholder="Paste Gemini API Key (starts with AIzaSy or AQ.)..."
                 value={customKey}
                 onChange={e => setCustomKey(e.target.value)}
                 className="bg-background border-indigo-500/30 flex-1 text-sm h-10"
