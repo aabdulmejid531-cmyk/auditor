@@ -70,12 +70,12 @@ export default function AIAssistant() {
 
   const handleSaveKey = (e: React.FormEvent) => {
     e.preventDefault();
-    if (customKey.trim().startsWith("AIzaSy")) {
+    if (customKey.trim().length >= 20) {
       localStorage.setItem("gemini_api_key", customKey.trim());
       Sonner.toast.success("Gemini API key saved successfully!");
       setShowKeyInput(false);
     } else {
-      Sonner.toast.error("Invalid key format. Google Gemini keys usually start with 'AIzaSy'.");
+      Sonner.toast.error("Key too short — please paste your full Gemini API key.");
     }
   };
 
