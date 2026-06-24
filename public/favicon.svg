@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="audit-grad" x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+  </defs>
+  <!-- Background gradient shape -->
+  <rect width="32" height="32" rx="8" fill="url(#audit-grad)"/>
+  
+  <!-- Outer Shield line -->
+  <path d="M16 5.5L25 8.5V15C25 20 21.2 24.2 16 26.5C10.8 24.2 7 20 7 15V8.5L16 5.5Z" stroke="white" stroke-width="1.5" stroke-opacity="0.3" fill="none"/>
+  
+  <!-- Success verification checkmark -->
+  <path d="M10.5 16.5L14 20L21.5 11.5" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
