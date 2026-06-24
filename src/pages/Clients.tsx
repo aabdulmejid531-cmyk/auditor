@@ -75,6 +75,25 @@ export default function Clients() {
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
 
+    // Safety net: ensure a profile row exists for this user before inserting
+    // the client (which has a FK → profiles.id). This handles the case where
+    // the on_auth_user_created trigger did not fire during registration.
+    const { error: profileError } = await supabase.from("profiles").upsert(
+      {
+        id: userData.user.id,
+        full_name: userData.user.user_metadata?.full_name ?? null,
+        firm_name: userData.user.user_metadata?.firm_name ?? null,
+        phone:     userData.user.user_metadata?.phone     ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    if (profileError) {
+      Sonner.toast.error("Profile sync failed: " + profileError.message);
+      return;
+    }
+
     const { error } = await supabase.from("clients").insert({
       name,
       tin,
@@ -93,6 +112,7 @@ export default function Clients() {
       fetchClients();
     }
   };
+
 
   const handleCreateEngagement = async (e: React.FormEvent) => {
     e.preventDefault();
