@@ -201,10 +201,13 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
         return;
       }
 
-      // Google Gemini API integration
+      // Google Gemini API integration - try multiple models with fallback
       const apiKey = customKey || envGeminiKey;
-      // We use gemini-2.5-flash as the recommended smart and fast model
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      const geminiModels = [
+        'gemini-2.5-flash',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash'
+      ];
 
       // Convert chat history to Gemini format
       const geminiContents = [
@@ -218,42 +221,78 @@ Provide exact references to standards (e.g. "per ISA 315.A45" or "under GDPR Art
         }
       ];
 
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: geminiContents,
-          systemInstruction: {
-            parts: [{ text: systemPrompt }]
-          },
-          generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: 2500,
+      let aiResponse: string | null = null;
+      let lastError: string | null = null;
+
+      for (const model of geminiModels) {
+        try {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: geminiContents,
+              systemInstruction: { parts: [{ text: systemPrompt }] },
+              generationConfig: { temperature: 0.6, maxOutputTokens: 2500 }
+            }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+            if (aiResponse) break;
           }
-        }),
-      });
 
-      const data = await response.json();
+          const errorMsg = data?.error?.message || response.statusText;
 
-      if (!response.ok) {
-        const errorMsg = data?.error?.message || response.statusText;
-        throw new Error(`GEMINI_API_ERROR:${errorMsg}`);
+          // If it's a model not found or invalid, try next model
+          if (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('not supported')) {
+            lastError = errorMsg;
+            continue;
+          }
+
+          // If it's a quota/demand error, try next model
+          if (errorMsg.toLowerCase().includes('high demand') || errorMsg.toLowerCase().includes('quota') || errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('429')) {
+            lastError = errorMsg;
+            continue;
+          }
+
+          // For other errors, throw immediately
+          throw new Error(`GEMINI_API_ERROR:${errorMsg}`);
+        } catch (e: any) {
+          if (e.message?.startsWith('GEMINI_API_ERROR:')) throw e;
+          lastError = e.message || 'Unknown error';
+          continue;
+        }
       }
 
-      const aiResponse = data.candidates[0].content.parts[0].text;
-      setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      if (aiResponse) {
+        setChatHistory(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      } else {
+        throw new Error(`GEMINI_API_ERROR:${lastError || 'All Gemini models unavailable'}`);
 
     } catch (error: any) {
       let errorMessage = "Unable to process AI audit query at this moment.";
       if (error.message && error.message.startsWith('GEMINI_API_ERROR:')) {
-        const apiMsg = error.message.replace('GEMINI_API_ERROR:', '');
-        errorMessage = `Gemini API returned an error: ${apiMsg}. Please verify your API Key or quota limits.`;
+        const apiMsg = error.message.replace('GEMINI_API_ERROR:', '').trim();
+        
+        if (apiMsg.toLowerCase().includes('high demand') || apiMsg.toLowerCase().includes('quota') || apiMsg.toLowerCase().includes('rate limit') || apiMsg.toLowerCase().includes('429')) {
+          errorMessage = "⚠️ **Gemini is currently overloaded.**\n\n" +
+            "This is a temporary issue with Google's free tier. Try:\n" +
+            "1. **Retry now** - click send again\n" +
+            "2. **Switch to OpenAI** - set `VITE_OPENAI_API_KEY` in .env\n" +
+            "3. **Switch to DeepSeek** - set `VITE_DEEPSEEK_API_KEY` in .env (cheapest)\n\n" +
+            "Or wait a few minutes and try again.";
+        } else if (apiMsg.toLowerCase().includes('key') || apiMsg.toLowerCase().includes('unauthorized') || apiMsg.toLowerCase().includes('permission')) {
+          errorMessage = "❌ **Invalid Gemini API Key.**\n\nPlease check your key at https://aistudio.google.com/app/apikey and update it above.";
+        } else {
+          errorMessage = `❌ **Gemini API Error:** ${apiMsg}`;
+        }
       } else if (error.message && error.message.startsWith('API_ERROR:')) {
-        errorMessage = `Fallback provider API error: ${error.message}`;
+        errorMessage = `❌ **Fallback provider error:** ${error.message}`;
       } else {
-        errorMessage = `Network or API connection failure. Please check your internet connectivity.`;
+        errorMessage = `❌ **Network or API connection failure.** Please check your internet connectivity.`;
       }
       setChatHistory(prev => [...prev, { role: 'ai', content: errorMessage }]);
     } finally {
